@@ -1,6 +1,6 @@
 import type { UserlessZapRequest, Vault, Token } from './types';
 import { ZERO_ADDRESS } from './utils';
-import { ZAP_ROUTERS } from './zap';
+import { ZAP_ROUTERS, TOKEN_MANAGERS } from './zap';
 import { BeefyZapRouterAbi } from './abi/BeefyZapRouterAbi';
 import { createWalletClient, custom, http, type Address } from 'viem';
 import { ERC20_ABI } from './erc20';
@@ -17,6 +17,7 @@ export async function executeOrderWithWallet(
   if (!chain) throw new Error(`Unsupported chain ${vault.chainId}`);
   const router = ZAP_ROUTERS[vault.chainId];
   if (!router) throw new Error(`No zap router for chain ${vault.chainId}`);
+  const spender = TOKEN_MANAGERS[vault.chainId] || router;
 
   const wallet = createWalletClient({ transport: custom(window.ethereum), chain: { ...chain, name: chain.name } as any });
 
@@ -69,7 +70,7 @@ export async function executeOrderWithWallet(
         address: input.token as Address,
         abi: ERC20_ABI as any,
         functionName: 'allowance',
-        args: [walletAddress as Address, router as Address],
+        args: [walletAddress as Address, spender as Address],
       } as any);
 
       const allowanceBigInt = BigInt(currentAllowance as any);
@@ -78,7 +79,7 @@ export async function executeOrderWithWallet(
         token: input.token,
         symbol,
         decimals,
-        router,
+        spender,
         allowanceWei: allowanceBigInt.toString(),
         requiredWei: input.amount.toString(),
       });
@@ -89,14 +90,14 @@ export async function executeOrderWithWallet(
           address: input.token as Address,
           abi: ERC20_ABI as any,
           functionName: 'approve',
-          args: [router as Address, MAX_UINT256],
+          args: [spender as Address, MAX_UINT256],
           account: walletAddress,
         });
         console.log('[Approve Sent]', {
           token: input.token,
           symbol,
           decimals,
-          router,
+          spender,
           approvedWei: MAX_UINT256.toString(),
           txHash: approvalHash,
         });
@@ -111,7 +112,7 @@ export async function executeOrderWithWallet(
             address: input.token as Address,
             abi: ERC20_ABI as any,
             functionName: 'allowance',
-            args: [walletAddress as Address, router as Address],
+            args: [walletAddress as Address, spender as Address],
           } as any);
           const postAllowanceBigInt = BigInt(postAllowance as any);
           if (postAllowanceBigInt >= input.amount) {
@@ -119,7 +120,7 @@ export async function executeOrderWithWallet(
               token: input.token,
               symbol,
               decimals,
-              router,
+              spender,
               allowanceWei: postAllowanceBigInt.toString(),
               requiredWei: input.amount.toString(),
               attempts: attempt + 1,
@@ -146,5 +147,6 @@ export async function executeOrderWithWallet(
     // chain is set in client
   });
 }
+
 
 
