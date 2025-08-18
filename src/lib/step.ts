@@ -75,27 +75,49 @@ export async function buildDepositStep(
   slippage: number,
   fromAddress?: `0x${string}`
 ): Promise<BuiltDepositStep> {
-  // 1) Swap tx (use zap router as from address to match original app)
+  // 1) Swap tx or direct pass-through if same token
   const { fetchSwapOneInch } = await import('./aggregators/oneInch');
   const { ZAP_ROUTERS } = await import('./zap');
   const router = ZAP_ROUTERS[vault.chainId];
   if (!router) throw new Error(`No zap router configured for chain ${vault.chainId}`);
-  const swap = await fetchSwapOneInch(bestQuote, router, slippage);
+
+  const isSameToken =
+    bestQuote.fromToken.address.toLowerCase() === depositToken.address.toLowerCase();
+
+  const swap = isSameToken
+    ? ({
+        providerId: 'no-swap',
+        fromToken: bestQuote.fromToken,
+        fromAmount: bestQuote.fromAmount,
+        toToken: bestQuote.toToken,
+        toAmount: bestQuote.fromAmount,
+        toAmountMin: bestQuote.fromAmount,
+        tx: {
+          fromAddress: router,
+          toAddress: ZERO_ADDRESS,
+          data: '0x',
+          value: '0',
+          inputPosition: -1,
+        },
+      } as any)
+    : await fetchSwapOneInch(bestQuote, router, slippage);
 
   // 2) Vault deposit step (min expected after slippage on add-liquidity)
   const minOutForVault = slipBy(swap.toAmount, slippage, depositToken.decimals);
   const vaultDeposit = await fetchVaultDepositZap(vault, depositToken, minOutForVault);
 
   // 3) Steps array
-  const steps: ZapStep[] = [
-    {
-      target: swap.tx.toAddress,
-      value: swap.tx.value,
-      data: swap.tx.data,
-      tokens: [{ token: bestQuote.fromToken.address, index: -1 }],
-    },
-    vaultDeposit.zap,
-  ];
+  const steps: ZapStep[] = isSameToken
+    ? [vaultDeposit.zap]
+    : [
+        {
+          target: swap.tx.toAddress,
+          value: swap.tx.value,
+          data: swap.tx.data,
+          tokens: [{ token: bestQuote.fromToken.address, index: -1 }],
+        },
+        vaultDeposit.zap,
+      ];
 
   // 4) Order inputs/outputs
   const inputs = [

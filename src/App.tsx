@@ -9,6 +9,7 @@ import type { Token, Vault } from './lib/types';
 import { fetchDepositQuote } from './lib/quote';
 import { buildDepositStep } from './lib/step';
 import { executeOrderWithWallet } from './lib/wallet-zap';
+import { executeDirectDepositWithWallet } from './lib/wallet-direct';
 
 function useWallet() {
   const [account, setAccount] = useState<`0x${string}` | null>(null);
@@ -210,14 +211,28 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const q = await fetchDepositQuote({
-        vault,
-        fromToken: selectedToken,
-        fromAmount: new BigNumber(amount),
-        toToken: depositToken,
-      });
-      setQuote(q);
-      setBuilt(null);
+      const isSameToken = selectedToken.address.toLowerCase() === depositToken.address.toLowerCase();
+      if (isSameToken) {
+        const fromAmount = new BigNumber(amount);
+        const q = {
+          providerId: 'no-swap',
+          fromToken: selectedToken,
+          fromAmount,
+          toToken: depositToken,
+          toAmount: fromAmount,
+        } as any;
+        setQuote(q);
+        setBuilt(null);
+      } else {
+        const q = await fetchDepositQuote({
+          vault,
+          fromToken: selectedToken,
+          fromAmount: new BigNumber(amount),
+          toToken: depositToken,
+        });
+        setQuote(q);
+        setBuilt(null);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -543,7 +558,13 @@ export default function App() {
                 setLoading(true);
                 setError(null);
                 try {
-                  await executeOrderWithWallet(vault, built.zapRequest, built.expectedTokens, account);
+                  const isSameToken = selectedToken && depositToken && selectedToken.address.toLowerCase() === depositToken.address.toLowerCase();
+                  const isErc20 = depositToken && depositToken.address !== ZERO_ADDRESS;
+                  if (isSameToken && isErc20 && depositToken) {
+                    await executeDirectDepositWithWallet(vault, depositToken, new BigNumber(amount), account);
+                  } else {
+                    await executeOrderWithWallet(vault, built.zapRequest, built.expectedTokens, account);
+                  }
                 } catch (err: any) {
                   setError(err.message);
                 } finally {
