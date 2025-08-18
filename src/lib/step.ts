@@ -1,7 +1,8 @@
 import BigNumber from 'bignumber.js';
 import type { BuiltDepositStep, QuoteResponse, Token, UserlessZapRequest, Vault, ZapStep } from './types';
-import { slipBy, toWeiString, getInsertIndex, ZERO_ADDRESS } from './utils';
+import { slipBy, toWeiString, ZERO_ADDRESS } from './utils';
 import { getPublicClient } from './chains';
+import { encodeFunctionData } from 'viem';
 
 const STANDARD_VAULT_ABI = [
   { type: 'function', name: 'getPricePerFullShare', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -30,14 +31,38 @@ export async function fetchVaultDepositZap(
     ? {
         target: vault.contractAddress,
         value: toWeiString(inputAmount, depositToken.decimals),
-        data: '0x', // depositBNB() selector would be encoded here; not needed for display-only
+        data: encodeFunctionData({
+          abi: [
+            {
+              constant: false,
+              inputs: [],
+              name: 'depositBNB',
+              outputs: [],
+              payable: true,
+              stateMutability: 'payable',
+              type: 'function',
+            },
+          ] as const,
+        }),
         tokens: [{ token: ZERO_ADDRESS, index: -1 }],
       }
     : {
         target: vault.contractAddress,
         value: '0',
-        data: '0x', // encodeFunctionData for deposit(_amount)
-        tokens: [{ token: depositToken.address, index: getInsertIndex(0) }],
+        data: encodeFunctionData({
+          abi: [
+            {
+              constant: false,
+              inputs: [],
+              name: 'depositAll',
+              outputs: [],
+              payable: false,
+              stateMutability: 'nonpayable',
+              type: 'function',
+            },
+          ] as const,
+        }),
+        tokens: [{ token: depositToken.address, index: -1 }],
       };
 
   return { outputs, zap };

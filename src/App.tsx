@@ -8,6 +8,7 @@ import { ZERO_ADDRESS } from './lib/utils';
 import type { Token, Vault } from './lib/types';
 import { fetchDepositQuote } from './lib/quote';
 import { buildDepositStep } from './lib/step';
+import { executeOrderWithWallet } from './lib/wallet-zap';
 
 function useWallet() {
   const [account, setAccount] = useState<`0x${string}` | null>(null);
@@ -526,6 +527,34 @@ export default function App() {
           >
             {loading ? 'Building Deposit...' : 'Build Deposit Step (dry-run)'}
           </button>
+          {built && (
+            <button
+              style={{ 
+                padding: '10px 20px', 
+                background: (!account || loading || !networkMatches) ? '#9ca3af' : '#16a34a', 
+                color: 'white', 
+                border: 'none', 
+                borderRadius: 6, 
+                cursor: (!account || loading || !networkMatches) ? 'not-allowed' : 'pointer', 
+                marginTop: 12, marginLeft: 12
+              }}
+              onClick={async () => {
+                if (!vault || !built || !account) return;
+                setLoading(true);
+                setError(null);
+                try {
+                  await executeOrderWithWallet(vault, built.zapRequest, built.expectedTokens, account);
+                } catch (err: any) {
+                  setError(err.message);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={!account || loading || !networkMatches}
+            >
+              {loading ? 'Sending…' : 'Deposit'}
+            </button>
+          )}
         </div>
       )}
 
