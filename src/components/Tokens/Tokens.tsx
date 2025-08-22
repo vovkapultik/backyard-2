@@ -147,7 +147,7 @@ const Tokens: FC<Props> = ({
           />
           {selectedToken &&
           selectedToken.balance &&
-          Number(selectedToken.balance) > 0 ? (
+          new BigNumber(selectedToken.balance.toString()).gt(0) ? (
             <>
               <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
                 {[25, 50, 75, 100].map(pct => (
