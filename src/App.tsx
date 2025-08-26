@@ -126,7 +126,7 @@ export default function App() {
           depositTokens[idx].address.toLowerCase();
         if (isSameToken) {
           const fromAmount = new BigNumber(amount).multipliedBy(
-            amountPercentageByVaultsIdx[idx]
+            amountPercentageByVaultsIdx[idx] / 100
           );
           const q = {
             providerId: 'no-swap',
@@ -135,15 +135,17 @@ export default function App() {
             toToken: depositTokens[idx],
             toAmount: fromAmount,
           } as any;
+
+          const resWithVaultId = { ...q, vaultId: vault[idx].id };
           setQuote(prev => {
-            if (!prev) return [q];
-            return [...prev, q];
+            if (!prev) return [resWithVaultId];
+            return [...prev, resWithVaultId];
           });
           setBuilt(null);
           return true;
         } else {
           const fromAmount = new BigNumber(amount).multipliedBy(
-            amountPercentageByVaultsIdx[idx]
+            amountPercentageByVaultsIdx[idx] / 100
           );
           const q = await fetchDepositQuote({
             vault: vault[idx],
@@ -151,9 +153,10 @@ export default function App() {
             fromAmount: fromAmount,
             toToken: depositTokens[idx],
           });
+          const resWithVaultId = { ...q, vaultId: vault[idx].id };
           setQuote(prev => {
-            if (!prev) return [q];
-            return [...prev, q];
+            if (!prev) return [resWithVaultId];
+            return [...prev, resWithVaultId];
           });
           setBuilt(null);
           return true;
@@ -165,7 +168,7 @@ export default function App() {
         setLoading(false);
       }
     },
-    [vault, depositTokens, selectedToken, amount]
+    [vault, depositTokens, selectedToken, amount, amountPercentageByVaultsIdx]
   );
 
   const handleQuote = async () => {
@@ -193,9 +196,11 @@ export default function App() {
           depositTokens[idx],
           slippage[idx]
         );
+
+        const resWithVaultId = { ...res, vaultId: vault[idx].id };
         setBuilt(prev => {
-          if (!prev) return [res];
-          return [...prev, res];
+          if (!prev) return [resWithVaultId];
+          return [...prev, resWithVaultId];
         });
         return true;
       } catch (err: any) {

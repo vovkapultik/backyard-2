@@ -63,7 +63,7 @@ const QuoteResult: FC<Props> = ({
         depositTokens?.length && depositTokens[idx].address !== ZERO_ADDRESS;
       if (isSameToken && isErc20 && depositTokens[idx]) {
         const fromAmount = new BigNumber(amount).multipliedBy(
-          amountPercentageByVaultsIdx[idx]
+          amountPercentageByVaultsIdx[idx] / 100
         );
         await executeDirectDepositWithWallet(
           vault[idx],
@@ -118,9 +118,12 @@ const QuoteResult: FC<Props> = ({
           overflow: 'auto',
         }}>
         {quote?.map((_, idx) => {
-          const fromAmount = Number(amount) * amountPercentageByVaultsIdx[idx];
+          const fromAmount =
+            Number(amount) * (amountPercentageByVaultsIdx[idx] / 100);
           return (
             <pre key={idx} style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              --------------{quote[idx].vaultId}--------------
+              <br />
               {JSON.stringify(
                 {
                   provider: quote[idx].providerId,

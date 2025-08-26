@@ -24,6 +24,8 @@ const DepositSteps: FC<Props> = ({ built }) => {
         {built.map((_, idx) => {
           return (
             <pre key={idx} style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              --------------{built[idx].vaultId}--------------
+              <br />
               {JSON.stringify(
                 {
                   swap: {
