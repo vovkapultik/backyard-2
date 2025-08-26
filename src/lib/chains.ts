@@ -1,4 +1,9 @@
 import { createPublicClient, http } from 'viem';
+import * as viemChains from 'viem/chains';
+
+export const getChainFromViem = (chainId: number) => {
+  return Object.values(viemChains).find(c => c.id === chainId);
+};
 
 export const CHAIN_CONFIG: Record<
   string,
@@ -7,9 +12,21 @@ export const CHAIN_CONFIG: Record<
   ethereum: { id: 1, rpc: 'https://ethereum.publicnode.com', name: 'ethereum' },
   bsc: { id: 56, rpc: 'https://bsc.publicnode.com', name: 'bsc' },
   polygon: { id: 137, rpc: 'https://polygon.publicnode.com', name: 'polygon' },
-  arbitrum: { id: 42161, rpc: 'https://arbitrum.publicnode.com', name: 'arbitrum' },
-  optimism: { id: 10, rpc: 'https://optimism.publicnode.com', name: 'optimism' },
-  avalanche: { id: 43114, rpc: 'https://avalanche.publicnode.com', name: 'avalanche' },
+  arbitrum: {
+    id: 42161,
+    rpc: 'https://arbitrum.publicnode.com',
+    name: 'arbitrum',
+  },
+  optimism: {
+    id: 10,
+    rpc: 'https://optimism.publicnode.com',
+    name: 'optimism',
+  },
+  avalanche: {
+    id: 43114,
+    rpc: 'https://avalanche.publicnode.com',
+    name: 'avalanche',
+  },
   fantom: { id: 250, rpc: 'https://fantom.publicnode.com', name: 'fantom' },
   base: { id: 8453, rpc: 'https://base.publicnode.com', name: 'base' },
 };

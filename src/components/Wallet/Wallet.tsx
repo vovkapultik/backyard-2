@@ -40,8 +40,9 @@ const Wallet: FC<Props> = ({
 
       // Check native balance first
       try {
-        const pc = getPublicClient(vault.chainId);
-        const bal = await pc.getBalance({ address: account });
+        const publicClient = getPublicClient(vault.chainId);
+        const bal = await publicClient.getBalance({ address: account });
+        console.log(`Native balance for ${account}: ${bal}`);
         if (bal > 0n)
           out.push({
             chainId: vault.chainId,
@@ -51,7 +52,9 @@ const Wallet: FC<Props> = ({
             balance: bal,
           });
       } catch {
-        // ignore
+        console.log(
+          `Failed scan wallet tokens to get native balance for ${account}`
+        );
       }
 
       // Check ERC20 tokens in batches
@@ -81,6 +84,15 @@ const Wallet: FC<Props> = ({
       }
 
       setWalletTokens(out);
+      //   setWalletTokens([
+      //     {
+      //       chainId: '1',
+      //       address: `0x0000000000000000000000000000000000000000`,
+      //       decimals: 18,
+      //       symbol: 'ETH',
+      //       balance: 3000000000000000000n,
+      //     },
+      //   ]);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -113,11 +125,11 @@ const Wallet: FC<Props> = ({
             color: 'white',
             border: 'none',
             borderRadius: 6,
-            cursor: 'pointer',
+            cursor: !!account ? 'not-allowed' : 'pointer',
             opacity: !networkMatches && account ? 0.5 : 1,
           }}
           onClick={connect}
-          disabled={!!account || (!networkMatches && !account)}>
+          disabled={!!account}>
           {account ? 'Connected' : 'Connect Wallet'}
         </button>
         {account && (
@@ -148,7 +160,7 @@ const Wallet: FC<Props> = ({
             color: '#ef4444',
             fontStyle: 'italic',
           }}>
-          Please switch to the correct network first
+          Please switch network, all vaults must be on the same network
         </div>
       )}
       {walletTokens.length > 0 && (

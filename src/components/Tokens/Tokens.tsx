@@ -1,21 +1,26 @@
 import { FC, useCallback } from 'react';
 import BigNumber from 'bignumber.js';
-import { Token } from '../../lib/types';
+import { Token, Vault } from '../../lib/types';
 
 type Props = {
   walletTokens: Token[];
   selectedToken: Token | null;
   setSelectedToken: (token: Token | null) => void;
+  vaults: Vault[] | null;
   amount: string;
+  amountPercentageByVaultsIdx: number[];
+  setPercentageAmountByVaultsIdx: (amounts: number[]) => void;
   setAmount: (amount: string) => void;
   percentage: number;
   setPercentage: (percentage: number) => void;
   selectedTokenBalance: BigNumber;
-  slippage: number;
-  setSlippage: (slippage: number) => void;
+  slippage: number[];
+  setSlippage: (slippage: number[]) => void;
   canQuote: boolean;
   onGetQuote: () => void;
   loading: boolean;
+  errorVaultName: string | null;
+  error: string | null;
 };
 
 const Tokens: FC<Props> = ({
@@ -23,6 +28,8 @@ const Tokens: FC<Props> = ({
   selectedToken,
   setSelectedToken,
   amount,
+  amountPercentageByVaultsIdx,
+  setPercentageAmountByVaultsIdx,
   setAmount,
   percentage,
   setPercentage,
@@ -32,6 +39,9 @@ const Tokens: FC<Props> = ({
   canQuote,
   onGetQuote,
   loading,
+  vaults,
+  errorVaultName,
+  error,
 }) => {
   const handleAmountChange = useCallback(
     (newAmount: string) => {
@@ -64,6 +74,9 @@ const Tokens: FC<Props> = ({
     },
     [selectedToken]
   );
+
+  const hundredPercent =
+    amountPercentageByVaultsIdx.reduce((a, b) => a + b, 0) === 100;
 
   return (
     <div
@@ -185,25 +198,52 @@ const Tokens: FC<Props> = ({
           ) : null}
         </div>
       </div>
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
-          Slippage (%):
-        </label>
-        <input
-          style={{
-            width: 200,
-            padding: '8px 12px',
-            border: '2px solid #e2e8f0',
-            borderRadius: 6,
-          }}
-          type="number"
-          step="0.1"
-          min="0.1"
-          max="49"
-          value={slippage * 100}
-          onChange={e => setSlippage((Number(e.target.value) || 1) / 100)}
-        />
-      </div>
+      {vaults?.length &&
+        Number(amount) > 0 &&
+        amountPercentageByVaultsIdx.map((amount, idx) => (
+          <div key={idx}>
+            <label>% of total amount for Vault {vaults[idx]?.id}: </label>
+            <input
+              style={{
+                width: 200,
+                padding: '8px 12px',
+                border: '2px solid #e2e8f0',
+                borderRadius: 6,
+              }}
+              type="text"
+              value={amount}
+              onChange={e => {
+                const newAmounts = [...amountPercentageByVaultsIdx];
+                newAmounts[idx] = Number(e.target.value);
+                setPercentageAmountByVaultsIdx(newAmounts);
+              }}
+            />
+            <div style={{ marginBottom: 12 }}>
+              <label
+                style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
+                Slippage (%):
+              </label>
+              <input
+                style={{
+                  width: 200,
+                  padding: '8px 12px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: 6,
+                }}
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="49"
+                value={slippage[idx] * 100}
+                onChange={e => {
+                  const newSlippage = [...slippage];
+                  newSlippage[idx] = Number(e.target.value || 1) / 100;
+                  setSlippage(newSlippage);
+                }}
+              />
+            </div>
+          </div>
+        ))}
       <button
         style={{
           padding: '10px 20px',
@@ -212,11 +252,34 @@ const Tokens: FC<Props> = ({
           border: 'none',
           borderRadius: 6,
           cursor: canQuote ? 'pointer' : 'not-allowed',
+          opacity: !canQuote || loading || !hundredPercent ? 0.5 : 1,
         }}
         onClick={onGetQuote}
-        disabled={!canQuote || loading}>
+        disabled={!canQuote || loading || !hundredPercent}>
         {loading ? 'Getting Quote...' : 'Get Quote'}
       </button>
+      {!hundredPercent && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 14,
+            color: '#ef4444',
+            fontStyle: 'italic',
+          }}>
+          Sum of percentages by vaults must equal 100%.
+        </div>
+      )}
+      {errorVaultName && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 14,
+            color: '#ef4444',
+            fontStyle: 'italic',
+          }}>
+          {`${error} -> ${errorVaultName}`}
+        </div>
+      )}
     </div>
   );
 };

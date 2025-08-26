@@ -5,6 +5,7 @@ type Props = {
   setVaultIdInput: (id: string) => void;
   loading: boolean;
   loadVault: () => void;
+  disabled: boolean;
 };
 
 const LoadVault: FC<Props> = ({
@@ -12,6 +13,7 @@ const LoadVault: FC<Props> = ({
   setVaultIdInput,
   loading,
   loadVault,
+  disabled,
 }) => {
   return (
     <div
@@ -47,10 +49,12 @@ const LoadVault: FC<Props> = ({
             color: 'white',
             border: 'none',
             borderRadius: 6,
-            cursor: 'pointer',
+            opacity: loading || !vaultIdInput || disabled ? 0.5 : 1,
+            cursor:
+              loading || !vaultIdInput || disabled ? 'not-allowed' : 'pointer',
           }}
           onClick={loadVault}
-          disabled={loading || !vaultIdInput}>
+          disabled={loading || !vaultIdInput || disabled}>
           {loading ? 'Loading...' : 'Load Vault'}
         </button>
       </div>

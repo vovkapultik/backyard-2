@@ -9,7 +9,7 @@ import { Vault } from '../lib/types';
 
 type TWalletType = {
   setError: (error: string | null) => void;
-  vault: Vault | null;
+  vault: Vault[] | null;
 };
 
 export function useWallet({ setError, vault }: TWalletType) {
@@ -29,6 +29,10 @@ export function useWallet({ setError, vault }: TWalletType) {
 
   // Initialize and track network changes
   useEffect(() => {
+    if ((window as any).ethereum._state.isConnected) {
+      setAccount((window as any).ethereum._state.accounts[0]);
+    }
+
     let cleanup: (() => void) | undefined;
 
     const initNetwork = async () => {
@@ -48,23 +52,26 @@ export function useWallet({ setError, vault }: TWalletType) {
     };
   }, []);
 
-  const handleSwitchNetwork = useCallback(async () => {
-    if (!vault) return;
+  const handleSwitchNetwork = useCallback(
+    async (idx: number) => {
+      if (!vault) return;
 
-    setNetworkSwitching(true);
-    try {
-      const success = await switchToNetwork(vault.chainId);
-      if (!success) {
-        setError(
-          `Failed to switch to ${vault.chainId} network. Please switch manually in your wallet.`
-        );
+      setNetworkSwitching(true);
+      try {
+        const success = await switchToNetwork(vault[idx].chainId);
+        if (!success) {
+          setError(
+            `Failed to switch to ${vault[idx].chainId} network. Please switch manually in your wallet.`
+          );
+        }
+      } catch (err: any) {
+        setError(`Network switch failed: ${err.message}`);
+      } finally {
+        setNetworkSwitching(false);
       }
-    } catch (err: any) {
-      setError(`Network switch failed: ${err.message}`);
-    } finally {
-      setNetworkSwitching(false);
-    }
-  }, [vault]);
+    },
+    [vault]
+  );
 
   return {
     account,

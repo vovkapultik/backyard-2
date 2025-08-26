@@ -5,6 +5,7 @@ import { NetworkInfo } from '../../lib/wallet';
 type Props = {
   vault: Vault;
   currentNetwork: NetworkInfo | null;
+  isCurrentNetworkMatch: boolean;
   networkMatches: boolean;
   networkSwitching: boolean;
   handleSwitchNetwork: () => void;
@@ -13,6 +14,7 @@ type Props = {
 const NetworkStatus: FC<Props> = ({
   vault,
   currentNetwork,
+  isCurrentNetworkMatch,
   networkMatches,
   networkSwitching,
   handleSwitchNetwork,
@@ -30,7 +32,7 @@ const NetworkStatus: FC<Props> = ({
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: 'column',
           gap: 12,
           marginBottom: 12,
         }}>
@@ -40,7 +42,7 @@ const NetworkStatus: FC<Props> = ({
         <div style={{ fontSize: 14 }}>
           <strong>Current:</strong> {currentNetwork?.chainId || 'Not connected'}
         </div>
-        {networkMatches ? (
+        {networkMatches || currentNetwork?.chainId === vault.chainId ? (
           <div style={{ color: '#10b981', fontWeight: 'bold', fontSize: 14 }}>
             ✓ Correct Network
           </div>

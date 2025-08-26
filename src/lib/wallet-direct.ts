@@ -1,16 +1,28 @@
 import type { Token, Vault } from './types';
 import { ERC20_ABI } from './erc20';
-import { CHAIN_CONFIG, getPublicClient } from './chains';
+import { CHAIN_CONFIG, getChainFromViem, getPublicClient } from './chains';
 import { createWalletClient, custom, type Address } from 'viem';
 import BigNumber from 'bignumber.js';
 import { toWeiString, ZERO_ADDRESS } from './utils';
 
 const STANDARD_VAULT_ABI = [
-  { type: 'function', name: 'deposit', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }], outputs: [] },
+  {
+    type: 'function',
+    name: 'deposit',
+    stateMutability: 'nonpayable',
+    inputs: [{ type: 'uint256' }],
+    outputs: [],
+  },
 ] as const;
 
 const ERC4626_VAULT_ABI = [
-  { type: 'function', name: 'deposit', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }, { type: 'address' }], outputs: [{ type: 'uint256' }] },
+  {
+    type: 'function',
+    name: 'deposit',
+    stateMutability: 'nonpayable',
+    inputs: [{ type: 'uint256' }, { type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
 ] as const;
 
 export async function executeDirectDepositWithWallet(
@@ -27,7 +39,10 @@ export async function executeDirectDepositWithWallet(
   const publicClient = getPublicClient(vault.chainId);
   if (!(window as any).ethereum) throw new Error('Wallet not found');
 
-  const wallet = createWalletClient({ transport: custom((window as any).ethereum), chain: { ...chain, name: chain.name } as any });
+  const wallet = createWalletClient({
+    transport: custom((window as any).ethereum),
+    chain: getChainFromViem(chain.id),
+  });
 
   const amountWei = BigInt(toWeiString(amount, depositToken.decimals));
   const spender = vault.contractAddress as Address;
@@ -81,7 +96,8 @@ export async function executeDirectDepositWithWallet(
     });
     await publicClient.waitForTransactionReceipt({ hash: approvalHash as any });
     // Poll until allowance reflects the new value
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const delay = (ms: number) =>
+      new Promise(resolve => setTimeout(resolve, ms));
     let updated = false;
     for (let attempt = 0; attempt < 30; attempt++) {
       const postAllowance = await publicClient.readContract({
@@ -107,7 +123,9 @@ export async function executeDirectDepositWithWallet(
       await delay(1000);
     }
     if (!updated) {
-      throw new Error('Approval transaction mined but allowance not updated yet. Please retry.');
+      throw new Error(
+        'Approval transaction mined but allowance not updated yet. Please retry.'
+      );
     }
   }
 
@@ -131,5 +149,3 @@ export async function executeDirectDepositWithWallet(
     account: walletAddress,
   });
 }
-
-

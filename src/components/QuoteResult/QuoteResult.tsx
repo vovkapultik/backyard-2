@@ -3,16 +3,17 @@ import BigNumber from 'bignumber.js';
 import { Vault, Token } from '../../lib/types';
 
 type Props = {
-  quote: any;
+  quote: any[];
   amount: string;
+  amountPercentageByVaultsIdx: number[];
   account: `0x${string}` | null;
   loading: boolean;
   networkMatches: boolean;
   onBuildDeposit: () => void;
   built: any;
-  vault: Vault | null;
+  vault: Vault[] | null;
   selectedToken: Token | null;
-  depositToken: Token | null;
+  depositTokens: Token[] | null;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   executeDirectDepositWithWallet: (
@@ -33,6 +34,7 @@ type Props = {
 const QuoteResult: FC<Props> = ({
   quote,
   amount,
+  amountPercentageByVaultsIdx,
   account,
   loading,
   networkMatches,
@@ -40,13 +42,62 @@ const QuoteResult: FC<Props> = ({
   built,
   vault,
   selectedToken,
-  depositToken,
+  depositTokens,
   setLoading,
   setError,
   executeDirectDepositWithWallet,
   executeOrderWithWallet,
   ZERO_ADDRESS,
 }) => {
+  const deposit = async (idx: number) => {
+    if (!vault || !built || !account) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const isSameToken =
+        selectedToken &&
+        depositTokens?.length &&
+        selectedToken.address.toLowerCase() ===
+          depositTokens[idx].address.toLowerCase();
+      const isErc20 =
+        depositTokens?.length && depositTokens[idx].address !== ZERO_ADDRESS;
+      if (isSameToken && isErc20 && depositTokens[idx]) {
+        const fromAmount = new BigNumber(amount).multipliedBy(
+          amountPercentageByVaultsIdx[idx]
+        );
+        await executeDirectDepositWithWallet(
+          vault[idx],
+          depositTokens[idx],
+          fromAmount,
+          account
+        );
+        return true;
+      } else {
+        await executeOrderWithWallet(
+          vault[idx],
+          built[idx].zapRequest,
+          built[idx].expectedTokens,
+          account
+        );
+        return true;
+      }
+    } catch (err: any) {
+      setError(err.message);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeposit = async () => {
+    if (!vault || !built || !account) return;
+
+    for (let index = 0; index < quote.length; index++) {
+      const success = await deposit(index);
+      if (!success) break;
+    }
+  };
+
   return (
     <div
       style={{
@@ -66,20 +117,25 @@ const QuoteResult: FC<Props> = ({
           fontSize: 14,
           overflow: 'auto',
         }}>
-        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-          {JSON.stringify(
-            {
-              provider: quote.providerId,
-              from: { token: quote.fromToken.symbol, amount },
-              to: {
-                token: quote.toToken.symbol,
-                amount: quote.toAmount.toString(),
-              },
-            },
-            null,
-            2
-          )}
-        </pre>
+        {quote?.map((_, idx) => {
+          const fromAmount = Number(amount) * amountPercentageByVaultsIdx[idx];
+          return (
+            <pre key={idx} style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify(
+                {
+                  provider: quote[idx].providerId,
+                  from: { token: quote[idx].fromToken.symbol, fromAmount },
+                  to: {
+                    token: quote[idx].toToken.symbol,
+                    amount: quote[idx].toAmount.toString(),
+                  },
+                },
+                null,
+                2
+              )}
+            </pre>
+          );
+        })}
       </div>
       <button
         style={{
@@ -113,39 +169,7 @@ const QuoteResult: FC<Props> = ({
             marginTop: 12,
             marginLeft: 12,
           }}
-          onClick={async () => {
-            if (!vault || !built || !account) return;
-            setLoading(true);
-            setError(null);
-            try {
-              const isSameToken =
-                selectedToken &&
-                depositToken &&
-                selectedToken.address.toLowerCase() ===
-                  depositToken.address.toLowerCase();
-              const isErc20 =
-                depositToken && depositToken.address !== ZERO_ADDRESS;
-              if (isSameToken && isErc20 && depositToken) {
-                await executeDirectDepositWithWallet(
-                  vault,
-                  depositToken,
-                  new BigNumber(amount),
-                  account
-                );
-              } else {
-                await executeOrderWithWallet(
-                  vault,
-                  built.zapRequest,
-                  built.expectedTokens,
-                  account
-                );
-              }
-            } catch (err: any) {
-              setError(err.message);
-            } finally {
-              setLoading(false);
-            }
-          }}
+          onClick={handleDeposit}
           disabled={!account || loading || !networkMatches}>
           {loading ? 'Sending…' : 'Deposit'}
         </button>
