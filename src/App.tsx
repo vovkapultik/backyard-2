@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import BigNumber from 'bignumber.js';
 import { ZERO_ADDRESS } from './lib/utils';
 import type { Token, Vault } from './lib/types';
@@ -20,12 +20,15 @@ export default function App() {
   const [walletTokens, setWalletTokens] = useState<Token[]>([]);
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [amount, setAmount] = useState('0');
+  const [amountPercentageByVaultsIdx, setPercentageAmountByVaultsIdx] =
+    useState<number[]>([]);
   const [percentage, setPercentage] = useState(0); // 0-100
-  const [slippage, setSlippage] = useState(0.01);
-  const [quote, setQuote] = useState<any>(null);
-  const [built, setBuilt] = useState<any>(null);
+  const [slippage, setSlippage] = useState<number[]>([]);
+  const [quote, setQuote] = useState<any[] | null>(null);
+  const [built, setBuilt] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorVaultName, setErrorVaultName] = useState<string | null>(null);
 
   const resetBeforeLoadVault = useCallback(() => {
     setWalletTokens([]);
@@ -34,14 +37,22 @@ export default function App() {
     setPercentage(0);
     setQuote(null);
     setBuilt(null);
+    setErrorVaultName(null);
   }, []);
 
-  const { loadVault, vaultIdInput, setVaultIdInput, vault, depositToken } =
-    useLoadVault({
-      setLoading,
-      setError,
-      resetBeforeLoadVault,
-    });
+  const {
+    loadVault,
+    vaultIdInput,
+    setVaultIdInput,
+    vault,
+    depositTokens,
+    deleteVault,
+  } = useLoadVault({
+    setLoading,
+    setError,
+    resetBeforeLoadVault,
+    setPercentageAmountByVaultsIdx,
+  });
 
   const {
     account,
@@ -54,12 +65,16 @@ export default function App() {
     vault,
   });
 
+  const vaultChainIds = vault?.map(v => v.chainId) ?? [];
+
   const networkMatches =
-    !vault || !currentNetwork || currentNetwork.chainId === vault.chainId;
+    !vault ||
+    !currentNetwork ||
+    vaultChainIds.every(id => id === currentNetwork.chainId);
 
   const canQuote =
     vault &&
-    depositToken &&
+    depositTokens?.length &&
     selectedToken &&
     new BigNumber(amount).gt(0) &&
     networkMatches;
@@ -72,56 +87,135 @@ export default function App() {
     );
   }, [selectedToken]);
 
-  const onGetQuote = useCallback(async () => {
-    if (!vault || !depositToken || !selectedToken) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const isSameToken =
-        selectedToken.address.toLowerCase() ===
-        depositToken.address.toLowerCase();
-      if (isSameToken) {
-        const fromAmount = new BigNumber(amount);
-        const q = {
-          providerId: 'no-swap',
-          fromToken: selectedToken,
-          fromAmount,
-          toToken: depositToken,
-          toAmount: fromAmount,
-        } as any;
-        setQuote(q);
-        setBuilt(null);
-      } else {
-        const q = await fetchDepositQuote({
-          vault,
-          fromToken: selectedToken,
-          fromAmount: new BigNumber(amount),
-          toToken: depositToken,
-        });
-        setQuote(q);
-        setBuilt(null);
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [vault, depositToken, selectedToken, amount]);
+  useEffect(() => {
+    if (!vault) return;
 
-  const onBuildDeposit = useCallback(async () => {
-    if (!vault || !depositToken || !quote || !account) return;
-    setLoading(true);
-    setError(null);
-    try {
-      // Use zap router as from address internally; wallet not needed for building
-      const res = await buildDepositStep(vault, quote, depositToken, slippage);
-      setBuilt(res);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    let percentageArr;
+
+    const vaultLength = vault?.length ?? 0;
+    const baseValue = Math.floor(100 / vaultLength);
+    const remainder = 100 % vaultLength;
+
+    if (remainder === 0) {
+      percentageArr = new Array(vaultLength).fill(baseValue);
+    } else {
+      percentageArr = new Array(vaultLength).fill(baseValue);
+      percentageArr[vaultLength - 1] = baseValue + remainder;
     }
-  }, [vault, depositToken, quote, slippage, account]);
+
+    const slippageArr = new Array(vaultLength).fill(0.01);
+
+    setPercentageAmountByVaultsIdx(percentageArr);
+    setSlippage(slippageArr);
+  }, [vault]);
+
+  useEffect(() => {
+    setQuote(null);
+    setBuilt(null);
+  }, [amount, amountPercentageByVaultsIdx, selectedToken]);
+
+  const onGetQuote = useCallback(
+    async (idx: number) => {
+      if (!vault || !depositTokens?.length || !selectedToken) return;
+      setLoading(true);
+      setError(null);
+      setErrorVaultName(null);
+      try {
+        const isSameToken =
+          selectedToken.address.toLowerCase() ===
+          depositTokens[idx].address.toLowerCase();
+        if (isSameToken) {
+          const fromAmount = new BigNumber(amount).multipliedBy(
+            amountPercentageByVaultsIdx[idx]
+          );
+          const q = {
+            providerId: 'no-swap',
+            fromToken: selectedToken,
+            fromAmount,
+            toToken: depositTokens[idx],
+            toAmount: fromAmount,
+          } as any;
+          setQuote(prev => {
+            if (!prev) return [q];
+            return [...prev, q];
+          });
+          setBuilt(null);
+          return true;
+        } else {
+          const fromAmount = new BigNumber(amount).multipliedBy(
+            amountPercentageByVaultsIdx[idx]
+          );
+          const q = await fetchDepositQuote({
+            vault: vault[idx],
+            fromToken: selectedToken,
+            fromAmount: fromAmount,
+            toToken: depositTokens[idx],
+          });
+          setQuote(prev => {
+            if (!prev) return [q];
+            return [...prev, q];
+          });
+          setBuilt(null);
+          return true;
+        }
+      } catch (err: any) {
+        setError(err.message);
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [vault, depositTokens, selectedToken, amount]
+  );
+
+  const handleQuote = async () => {
+    if (!vault) return;
+
+    for (let index = 0; index < vault.length; index++) {
+      const success = await onGetQuote(index);
+      if (!success) {
+        setErrorVaultName(vault[index].id);
+        break;
+      }
+    }
+  };
+
+  const onBuildDeposit = useCallback(
+    async (idx: number) => {
+      if (!vault || !depositTokens?.length || !quote || !account) return;
+      setLoading(true);
+      setError(null);
+      try {
+        // Use zap router as from address internally; wallet not needed for building
+        const res = await buildDepositStep(
+          vault[idx],
+          quote[idx],
+          depositTokens[idx],
+          slippage[idx]
+        );
+        setBuilt(prev => {
+          if (!prev) return [res];
+          return [...prev, res];
+        });
+        return true;
+      } catch (err: any) {
+        setError(err.message);
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [vault, depositTokens, quote, slippage, account]
+  );
+
+  const handleBuildDeposit = async () => {
+    if (!vault || !depositTokens?.length || !quote || !account) return;
+
+    for (let index = 0; index < vault.length; index++) {
+      const success = await onBuildDeposit(index);
+      if (!success) break;
+    }
+  };
 
   return (
     <div
@@ -149,22 +243,41 @@ export default function App() {
       )}
 
       <LoadVault
+        disabled={
+          (vault?.length ?? 0) >= 3 ||
+          (vault ?? []).some(v => v.id === vaultIdInput)
+        }
         loadVault={loadVault}
         loading={loading}
         vaultIdInput={vaultIdInput}
         setVaultIdInput={setVaultIdInput}
       />
 
-      {vault && <VaultDetails vault={vault} depositToken={depositToken} />}
-
       {vault && (
-        <NetworkStatus
-          vault={vault}
-          currentNetwork={currentNetwork}
-          networkMatches={networkMatches}
-          networkSwitching={networkSwitching}
-          handleSwitchNetwork={handleSwitchNetwork}
-        />
+        <div style={{ display: 'flex', gap: 20 }}>
+          {vault.map((v, idx) => (
+            <div key={idx} style={{ flex: 1 }}>
+              <VaultDetails
+                vault={v}
+                depositToken={depositTokens ? depositTokens[idx] : null}
+                deleteVault={() => {
+                  resetBeforeLoadVault();
+                  deleteVault(idx);
+                }}
+              />
+              <NetworkStatus
+                vault={v}
+                isCurrentNetworkMatch={
+                  currentNetwork?.chainId === vaultChainIds[idx]
+                }
+                currentNetwork={currentNetwork}
+                networkMatches={networkMatches}
+                networkSwitching={networkSwitching}
+                handleSwitchNetwork={() => handleSwitchNetwork(idx)}
+              />
+            </div>
+          ))}
+        </div>
       )}
 
       {vault && (
@@ -175,7 +288,7 @@ export default function App() {
           walletTokens={walletTokens}
           setWalletTokens={setWalletTokens}
           connect={connect}
-          vault={vault}
+          vault={vault[0]}
           setLoading={setLoading}
           setError={setError}
         />
@@ -183,6 +296,7 @@ export default function App() {
 
       {walletTokens.length > 0 && (
         <Tokens
+          vaults={vault}
           walletTokens={walletTokens}
           selectedToken={selectedToken}
           setSelectedToken={setSelectedToken}
@@ -194,23 +308,28 @@ export default function App() {
           slippage={slippage}
           setSlippage={setSlippage}
           canQuote={Boolean(canQuote)}
-          onGetQuote={onGetQuote}
+          onGetQuote={handleQuote}
           loading={loading}
+          amountPercentageByVaultsIdx={amountPercentageByVaultsIdx}
+          setPercentageAmountByVaultsIdx={setPercentageAmountByVaultsIdx}
+          errorVaultName={errorVaultName}
+          error={error}
         />
       )}
 
-      {quote && (
+      {quote && !error && (
         <QuoteResult
           quote={quote}
           amount={amount}
+          amountPercentageByVaultsIdx={amountPercentageByVaultsIdx}
           account={account}
           loading={loading}
           networkMatches={networkMatches}
-          onBuildDeposit={onBuildDeposit}
+          onBuildDeposit={handleBuildDeposit}
           built={built}
           vault={vault}
           selectedToken={selectedToken}
-          depositToken={depositToken}
+          depositTokens={depositTokens}
           setLoading={setLoading}
           setError={setError}
           executeDirectDepositWithWallet={executeDirectDepositWithWallet}
@@ -219,7 +338,7 @@ export default function App() {
         />
       )}
 
-      {built && <DepositSteps built={built} />}
+      {built && !error && <DepositSteps built={built} />}
     </div>
   );
 }

@@ -21,30 +21,35 @@ const DepositSteps: FC<Props> = ({ built }) => {
           overflow: 'auto',
           maxHeight: 600,
         }}>
-        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-          {JSON.stringify(
-            {
-              swap: {
-                provider: built.swap.providerId,
-                fromAmount: built.swap.fromAmount.toString(),
-                toAmount: built.swap.toAmount.toString(),
-                toAmountMin: built.swap.toAmountMin.toString(),
-                tx: built.swap.tx,
-              },
-              vaultDeposit: {
-                expectedShares: built.vaultDeposit.outputs[0].amount.toString(),
-                zapStep: built.vaultDeposit.zap,
-              },
-              zapRequest: built.zapRequest,
-              expectedTokens: built.expectedTokens.map((t: any) => ({
-                symbol: t.symbol,
-                address: t.address,
-              })),
-            },
-            null,
-            2
-          )}
-        </pre>
+        {built.map((_, idx) => {
+          return (
+            <pre key={idx} style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify(
+                {
+                  swap: {
+                    provider: built[idx].swap.providerId,
+                    fromAmount: built[idx].swap.fromAmount.toString(),
+                    toAmount: built[idx].swap.toAmount.toString(),
+                    toAmountMin: built[idx].swap.toAmountMin.toString(),
+                    tx: built[idx].swap.tx,
+                  },
+                  vaultDeposit: {
+                    expectedShares:
+                      built[idx].vaultDeposit.outputs[0].amount.toString(),
+                    zapStep: built[idx].vaultDeposit.zap,
+                  },
+                  zapRequest: built[idx].zapRequest,
+                  expectedTokens: built[idx].expectedTokens.map((t: any) => ({
+                    symbol: t.symbol,
+                    address: t.address,
+                  })),
+                },
+                null,
+                2
+              )}
+            </pre>
+          );
+        })}
       </div>
       <div
         style={{

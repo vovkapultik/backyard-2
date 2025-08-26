@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { fetchAllVaults } from '../lib/beefy';
 import { Token, Vault } from '../lib/types';
 import { readErc20Meta } from '../lib/erc20';
@@ -8,18 +8,27 @@ type THookProps = {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   resetBeforeLoadVault: () => void;
+  setPercentageAmountByVaultsIdx: React.Dispatch<
+    React.SetStateAction<number[]>
+  >;
 };
 
 export function useLoadVault({
   setLoading,
   setError,
   resetBeforeLoadVault,
+  setPercentageAmountByVaultsIdx,
 }: THookProps) {
   const [vaultIdInput, setVaultIdInput] = useState('');
-  const [vault, setVault] = useState<Vault | null>(null);
-  const [depositToken, setDepositToken] = useState<Token | null>(null);
+  const [vault, setVault] = useState<Vault[] | null>(null);
+  const [depositTokens, setDepositTokens] = useState<Token[] | null>(null);
 
   const loadVault = useCallback(async () => {
+    if (vault?.some(v => v.id === vaultIdInput)) {
+      // Vault is already loaded
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -47,7 +56,10 @@ export function useLoadVault({
           `This demo supports standard/erc4626 only. Vault '${v.id}' is type '${v.type}'`
         );
       }
-      setVault(v);
+      setVault(prev => {
+        if (!prev) return [v];
+        return [...prev, v];
+      });
 
       // resolve deposit token (treat zero address as native)
       console.log(
@@ -55,21 +67,50 @@ export function useLoadVault({
         v.depositTokenAddress
       );
       if (v.depositTokenAddress === ZERO_ADDRESS) {
-        setDepositToken({
-          chainId: v.chainId,
-          address: ZERO_ADDRESS,
-          decimals: 18,
-          symbol: 'NATIVE',
+        setDepositTokens(prev => {
+          if (!prev)
+            return [
+              {
+                chainId: v.chainId,
+                address: ZERO_ADDRESS,
+                decimals: 18,
+                symbol: 'NATIVE',
+              },
+            ];
+          return [
+            ...prev,
+            {
+              chainId: v.chainId,
+              address: ZERO_ADDRESS,
+              decimals: 18,
+              symbol: 'NATIVE',
+            },
+          ];
         });
       } else {
         try {
           const meta = await readErc20Meta(v.chainId, v.depositTokenAddress);
           console.log('Token metadata:', meta);
-          setDepositToken({
-            chainId: v.chainId,
-            address: v.depositTokenAddress,
-            decimals: meta.decimals,
-            symbol: meta.symbol,
+          setDepositTokens(prev => {
+            if (!prev) {
+              return [
+                {
+                  chainId: v.chainId,
+                  address: v.depositTokenAddress,
+                  decimals: meta.decimals,
+                  symbol: meta.symbol,
+                },
+              ];
+            }
+            return [
+              ...prev,
+              {
+                chainId: v.chainId,
+                address: v.depositTokenAddress,
+                decimals: meta.decimals,
+                symbol: meta.symbol,
+              },
+            ];
           });
         } catch (tokenError: any) {
           console.error('Failed to read token metadata:', tokenError);
@@ -84,7 +125,27 @@ export function useLoadVault({
     } finally {
       setLoading(false);
     }
-  }, [vaultIdInput]);
+  }, [vaultIdInput, vault]);
 
-  return { vaultIdInput, setVaultIdInput, loadVault, vault, depositToken };
+  const deleteVault = useCallback((idx: number) => {
+    setVault(prev => {
+      if (!prev) return null;
+      return prev.filter((_, i) => i !== idx);
+    });
+
+    setDepositTokens(prev => {
+      if (!prev) return null;
+      return prev.filter((_, i) => i !== idx);
+    });
+    setPercentageAmountByVaultsIdx(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  return {
+    vaultIdInput,
+    setVaultIdInput,
+    loadVault,
+    vault,
+    depositTokens,
+    deleteVault,
+  };
 }

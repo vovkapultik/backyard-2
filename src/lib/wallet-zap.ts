@@ -4,7 +4,7 @@ import { ZAP_ROUTERS, TOKEN_MANAGERS } from './zap';
 import { BeefyZapRouterAbi } from './abi/BeefyZapRouterAbi';
 import { createWalletClient, custom, http, type Address } from 'viem';
 import { ERC20_ABI } from './erc20';
-import { CHAIN_CONFIG, getPublicClient } from './chains';
+import { CHAIN_CONFIG, getChainFromViem, getPublicClient } from './chains';
 
 export async function executeOrderWithWallet(
   vault: Vault,
@@ -19,13 +19,19 @@ export async function executeOrderWithWallet(
   if (!router) throw new Error(`No zap router for chain ${vault.chainId}`);
   const spender = TOKEN_MANAGERS[vault.chainId] || router;
 
-  const wallet = createWalletClient({ transport: custom(window.ethereum), chain: { ...chain, name: chain.name } as any });
+  const wallet = createWalletClient({
+    transport: custom(window.ethereum),
+    chain: getChainFromViem(chain.id),
+  });
 
   const order = {
     inputs: request.order.inputs
       .filter(i => BigInt(i.amount) > 0n)
       .map(i => ({ token: i.token as Address, amount: BigInt(i.amount) })),
-    outputs: request.order.outputs.map(o => ({ token: o.token as Address, minOutputAmount: BigInt(o.minOutputAmount) })),
+    outputs: request.order.outputs.map(o => ({
+      token: o.token as Address,
+      minOutputAmount: BigInt(o.minOutputAmount),
+    })),
     relay: {
       target: request.order.relay.target as Address,
       value: BigInt(request.order.relay.value),
@@ -42,13 +48,18 @@ export async function executeOrderWithWallet(
     tokens: s.tokens.map(t => ({ token: t.token as Address, index: t.index })),
   }));
 
-  const nativeInput = order.inputs.find(i => i.token === (ZERO_ADDRESS as Address));
+  const nativeInput = order.inputs.find(
+    i => i.token === (ZERO_ADDRESS as Address)
+  );
 
   // For ERC-20 inputs, ensure allowance to router is sufficient; if not, request approval
-  const erc20Inputs = order.inputs.filter(i => i.token !== (ZERO_ADDRESS as Address));
+  const erc20Inputs = order.inputs.filter(
+    i => i.token !== (ZERO_ADDRESS as Address)
+  );
   if (erc20Inputs.length > 0) {
     const publicClient = getPublicClient(vault.chainId);
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    const delay = (ms: number) =>
+      new Promise(resolve => setTimeout(resolve, ms));
     for (const input of erc20Inputs) {
       // Read token metadata for logging (decimals/symbol)
       const [decRaw, symRaw] = await Promise.all([
@@ -103,7 +114,9 @@ export async function executeOrderWithWallet(
         });
 
         // Wait for the approval tx to be mined
-        await publicClient.waitForTransactionReceipt({ hash: approvalHash as any });
+        await publicClient.waitForTransactionReceipt({
+          hash: approvalHash as any,
+        });
 
         // Poll until allowance reflects the new value
         let updated = false;
@@ -131,7 +144,9 @@ export async function executeOrderWithWallet(
           await delay(1000);
         }
         if (!updated) {
-          throw new Error('Approval transaction mined but allowance not updated yet. Please retry.');
+          throw new Error(
+            'Approval transaction mined but allowance not updated yet. Please retry.'
+          );
         }
       }
     }
@@ -147,7 +162,3 @@ export async function executeOrderWithWallet(
     // chain is set in client
   });
 }
-
-
-
-
